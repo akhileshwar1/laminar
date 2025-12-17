@@ -1,0 +1,20 @@
+# --- Rust Standard ---
+/target
+Cargo.lock
+
+# --- Environment & Secrets (CRITICAL) ---
+.env
+.env.*
+config.toml
+secrets.toml
+*.key
+*.pem
+
+# --- IDEs ---
+.vscode/
+.idea/
+*.swp
+
+# --- Logs ---
+*.log
+/logs
