@@ -7,6 +7,8 @@ description = "A unified multi-broker OMS and Strategy monolith in Rust"
 
 [dependencies]
 # --- Core Logic & Async ---
+rust_decimal = "1.34"
+rust_decimal_macros = "1.34"
 tokio = { version = "1.35", features = ["full"] }
 async-trait = "0.1"
 futures = "0.3"
@@ -15,8 +17,6 @@ futures = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 dashmap = "5.5" # Thread-safe state management for OMS
-rust_decimal = "1.33" # Precise financial math
-rust_decimal_macros = "1.33"
 uuid = { version = "1.6", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 
@@ -26,7 +26,7 @@ tracing-subscriber = "0.3"
 
 # --- Optional Broker SDKs ---
 # We use 'dep:' syntax in features to keep these optional
-hyperliquid-rust-sdk = { version = "0.6", optional = true }
+hyperliquid_rust_sdk = { version = "0.6", optional = true }
 # binance = { version = "0.11", optional = true }
 
 [features]
@@ -35,7 +35,7 @@ default = ["simulator"]
 simulator = []
 
 # Hyperliquid support
-hyperliquid = ["dep:hyperliquid-rust-sdk"]
+hyperliquid = ["dep:hyperliquid_rust_sdk"]
 
 # Future expansion
 # binance = ["dep:binance"]
