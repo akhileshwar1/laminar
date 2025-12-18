@@ -2,6 +2,7 @@ use tokio::sync::mpsc;
 
 use super::engine::OmsEngine;
 use super::event::OmsEvent;
+use crate::broker::sim::SimBroker;
 
 pub struct OmsRuntime {
     sender: mpsc::Sender<OmsEvent>,
@@ -15,6 +16,7 @@ impl OmsRuntime {
 
 pub fn start_oms() -> OmsRuntime {
     let (tx, mut rx) = mpsc::channel::<OmsEvent>(1024);
+    let broker = SimBroker::new(tx.clone());
 
     
     tokio::spawn(async move {
@@ -37,6 +39,10 @@ pub fn start_oms() -> OmsRuntime {
                         "[OMS] order created {:?} {:?} qty={}",
                         oid, side, qty
                     );
+                    let broker = broker.clone();
+                    tokio::spawn(async move {
+                        broker.place_order(oid, side, qty).await;
+                    });
                 }
 
                 OmsEvent::OrderAccepted { order_id } => {
