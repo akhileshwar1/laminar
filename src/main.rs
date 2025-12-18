@@ -2,36 +2,26 @@ use rust_decimal_macros::dec;
 use tokio::time::{sleep, Duration};
 
 use laminar::oms::event::OmsEvent;
-use laminar::oms::order::Side;
 use laminar::oms::runtime::start_oms;
+use laminar::strategy::simple::run_strategy;
 
 #[tokio::main]
 async fn main() {
     println!("[MAIN] starting laminar");
 
-    // start OMS runtime
     let oms = start_oms();
     let tx = oms.sender();
 
-    // 1. strategy sets target
+    // set an initial target
     tx.send(OmsEvent::SetTarget { qty: dec!(1.0) })
         .await
         .unwrap();
 
-    sleep(Duration::from_millis(100)).await;
+    // start strategy loop
+    tokio::spawn(run_strategy(tx.clone()));
 
-    // 2. strategy asks OMS to create an order
-    // OMS will generate OrderId internally
-    // SimBroker will echo events back
-    tx.send(OmsEvent::CreateOrder {
-        side: Side::Buy,
-        qty: dec!(1.0),
-    })
-    .await
-        .unwrap();
-
-    // let async system run
-    sleep(Duration::from_secs(2)).await;
+    // let it run
+    sleep(Duration::from_secs(5)).await;
 
     println!("[MAIN] exiting");
 }

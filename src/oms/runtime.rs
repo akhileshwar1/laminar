@@ -81,6 +81,10 @@ pub fn start_oms() -> OmsRuntime {
                     );
                 }
 
+                OmsEvent::GetDelta { reply } => {
+                    let _ = reply.send(oms.delta());
+                }
+
                 OmsEvent::Tick => {
                     println!("[OMS] tick → delta={}", oms.delta());
                 }

@@ -1,4 +1,5 @@
 use rust_decimal::Decimal;
+use tokio::sync::oneshot;
 
 use super::order::{OrderId, Side};
 
@@ -27,6 +28,10 @@ pub enum OmsEvent {
 
     CancelConfirmed {
         order_id: OrderId,
+    },
+
+    GetDelta {
+        reply: oneshot::Sender<rust_decimal::Decimal>,
     },
 
     // internal
