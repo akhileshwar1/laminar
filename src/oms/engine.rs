@@ -4,12 +4,14 @@ use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 
 use super::core::{OmsCore, Quantity};
+use super::position::Position;
 use super::order::{Order, OrderId, Side};
 
 #[derive(Debug)]
 pub struct OmsEngine {
     core: OmsCore,
     orders: HashMap<OrderId, Order>,
+    position: Position,
 }
 
 impl OmsEngine {
@@ -17,6 +19,7 @@ impl OmsEngine {
         Self {
             core: OmsCore::new(),
             orders: HashMap::new(),
+            position: Position::new(),
         }
     }
 
@@ -28,6 +31,10 @@ impl OmsEngine {
 
     pub fn delta(&self) -> Decimal {
         self.core.delta().0
+    }
+
+    pub fn position(&self) -> &Position {
+        &self.position
     }
 
     /* ---------- Order lifecycle ---------- */
@@ -45,12 +52,17 @@ impl OmsEngine {
         self.recompute_open_exposure();
     }
 
-    pub fn on_fill(&mut self, id: OrderId, fill_qty: Decimal) {
+    pub fn on_fill(&mut self, id: OrderId, fill_qty: Decimal, price: Decimal) {
         let order = self.orders.get_mut(&id).expect("unknown order");
         order.on_fill(fill_qty);
 
         // truth update
         let signed = fill_qty * order.side.sign();
+
+        // update position economics
+        self.position.apply_fill(signed, price);
+
+        // update reconciliation truth
         self.core.on_fill(Quantity(signed));
 
         self.recompute_open_exposure();
@@ -98,10 +110,10 @@ mod tests {
 
         assert_eq!(oms.delta(), dec!(0.0));
 
-        oms.on_fill(oid, dec!(0.4));
+        oms.on_fill(oid, dec!(0.4), dec!(100));
         assert_eq!(oms.delta(), dec!(0.0));
 
-        oms.on_fill(oid, dec!(0.6));
+        oms.on_fill(oid, dec!(0.6), dec!(100));
         assert_eq!(oms.delta(), dec!(0.0));
     }
 
@@ -117,5 +129,23 @@ mod tests {
         oms.on_cancel_confirmed(oid);
 
         assert_eq!(oms.delta(), dec!(1.0));
+    }
+
+    #[test]
+    fn position_updates_with_fills() {
+        use rust_decimal_macros::dec;
+
+        let mut oms = OmsEngine::new();
+
+        oms.set_target_position(dec!(1.0));
+        let oid = oms.create_order(Side::Buy, dec!(1.0));
+        oms.on_order_accepted(oid);
+
+        oms.on_fill(oid, dec!(0.4), dec!(100.0));
+        oms.on_fill(oid, dec!(0.6), dec!(101.0));
+
+        let pos = oms.position();
+        assert_eq!(pos.net_qty, dec!(1.0));
+        assert_eq!(pos.avg_price, dec!(100.6));
     }
 }
