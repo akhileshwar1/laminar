@@ -3,7 +3,7 @@ use tokio::time::{sleep, Duration};
 
 use laminar::oms::event::OmsEvent;
 use laminar::oms::runtime::start_oms;
-use laminar::strategy::simple::run_strategy;
+use laminar::strategy::mm::run_mm_strategy;
 
 #[tokio::main]
 async fn main() {
@@ -18,7 +18,7 @@ async fn main() {
         .unwrap();
 
     // start strategy loop
-    tokio::spawn(run_strategy(tx.clone()));
+    tokio::spawn(run_mm_strategy(tx.clone()));
 
     // let it run
     sleep(Duration::from_secs(5)).await;
