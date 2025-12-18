@@ -117,3 +117,35 @@ impl Order {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rust_decimal_macros::dec;
+
+    #[test]
+    fn partial_fill_flow() {
+        let mut o = Order::new(Side::Buy, dec!(1.0));
+        o.on_accepted();
+
+        o.on_fill(dec!(0.4));
+        assert_eq!(
+            o.state,
+            OrderState::PartiallyFilled { remaining: dec!(0.6) }
+        );
+
+        o.on_fill(dec!(0.6));
+        assert_eq!(o.state, OrderState::Filled);
+    }
+
+    #[test]
+    fn cancel_flow() {
+        let mut o = Order::new(Side::Sell, dec!(2.0));
+        o.on_accepted();
+        o.on_cancel_requested();
+        o.on_cancel_confirmed();
+
+        assert_eq!(o.state, OrderState::Cancelled);
+    }
+
+}
