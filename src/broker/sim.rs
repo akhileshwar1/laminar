@@ -16,7 +16,12 @@ impl SimBroker {
         Self { oms_tx }
     }
 
-    pub async fn place_order(&self, order_id: OrderId, side: Side, qty: Decimal) {
+    pub async fn place_order(&self, order_id: OrderId, side: Side, qty: Decimal, price: Decimal) {
+
+        println!(
+            "[SIM] place {:?} {:?} qty={} @ {}",
+            order_id, side, qty, price
+        );
         // simulate exchange ack
         sleep(Duration::from_millis(50)).await;
 

@@ -33,15 +33,15 @@ pub fn start_oms() -> OmsRuntime {
                     println!("[OMS] target set → delta = {}", oms.delta());
                 }
 
-                OmsEvent::CreateOrder { side, qty } => {
-                    let oid = oms.create_order(side, qty);
+                OmsEvent::CreateOrder { side, qty, price } => {
+                    let oid = oms.create_order(side, qty, price);
                     println!(
-                        "[OMS] order created {:?} {:?} qty={}",
-                        oid, side, qty
+                        "[OMS] order created {:?} {:?} qty={} price={}",
+                        oid, side, qty, price
                     );
                     let broker = broker.clone();
                     tokio::spawn(async move {
-                        broker.place_order(oid, side, qty).await;
+                        broker.place_order(oid, side, qty, price).await;
                     });
                 }
 

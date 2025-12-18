@@ -26,11 +26,13 @@ pub async fn run_strategy(oms_tx: mpsc::Sender<OmsEvent>) {
                 oms_tx.send(OmsEvent::CreateOrder {
                     side: Side::Buy,
                     qty: delta,
+                    price: dec!(100),
                 }).await.unwrap();
             } else {
                 oms_tx.send(OmsEvent::CreateOrder {
                     side: Side::Sell,
                     qty: delta.abs(),
+                    price: dec!(100),
                 }).await.unwrap();
             }
         }

@@ -42,6 +42,7 @@ pub async fn run_mm_strategy(oms_tx: mpsc::Sender<OmsEvent>) {
             .send(OmsEvent::CreateOrder {
                 side: Side::Buy,
                 qty: base_qty,
+                price: bid,
             })
         .await
             .unwrap();
@@ -50,6 +51,7 @@ pub async fn run_mm_strategy(oms_tx: mpsc::Sender<OmsEvent>) {
             .send(OmsEvent::CreateOrder {
                 side: Side::Sell,
                 qty: base_qty,
+                price: ask,
             })
         .await
             .unwrap();

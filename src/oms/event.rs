@@ -13,6 +13,7 @@ pub enum OmsEvent {
     CreateOrder {
         side: Side,
         qty: Decimal,
+        price: Decimal,
     },
 
     // exchange → OMS (later broker)

@@ -49,15 +49,17 @@ pub struct Order {
     pub id: OrderId,
     pub side: Side,
     pub original_qty: Decimal,
+    pub limit_price: Decimal,
     pub state: OrderState,
 }
 
 impl Order {
-    pub fn new(side: Side, qty: Decimal) -> Self {
+    pub fn new(side: Side, qty: Decimal, price: Decimal) -> Self {
         Self {
             id: OrderId(Uuid::new_v4()),
             side,
             original_qty: qty,
+            limit_price: price,
             state: OrderState::New,
         }
     }
@@ -125,7 +127,7 @@ mod tests {
 
     #[test]
     fn partial_fill_flow() {
-        let mut o = Order::new(Side::Buy, dec!(1.0));
+        let mut o = Order::new(Side::Buy, dec!(1.0), dec!(100));
         o.on_accepted();
 
         o.on_fill(dec!(0.4));
@@ -140,7 +142,7 @@ mod tests {
 
     #[test]
     fn cancel_flow() {
-        let mut o = Order::new(Side::Sell, dec!(2.0));
+        let mut o = Order::new(Side::Sell, dec!(2.0), dec!(101));
         o.on_accepted();
         o.on_cancel_requested();
         o.on_cancel_confirmed();

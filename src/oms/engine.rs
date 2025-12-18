@@ -39,8 +39,8 @@ impl OmsEngine {
 
     /* ---------- Order lifecycle ---------- */
 
-    pub fn create_order(&mut self, side: Side, qty: Decimal) -> OrderId {
-        let order = Order::new(side, qty);
+    pub fn create_order(&mut self, side: Side, qty: Decimal, price: Decimal) -> OrderId {
+        let order = Order::new(side, qty, price);
         let id = order.id;
         self.orders.insert(id, order);
         id
