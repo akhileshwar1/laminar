@@ -85,6 +85,17 @@ pub fn start_oms() -> OmsRuntime {
                     let _ = reply.send(oms.delta());
                 }
 
+                OmsEvent::CancelAll => {
+                    for id in oms.open_order_ids() {
+                        oms.request_cancel(id);
+
+                        let broker = broker.clone();
+                        tokio::spawn(async move {
+                            broker.cancel_order(id).await;
+                        });
+                    }
+                }
+
                 OmsEvent::Tick => {
                     println!("[OMS] tick → delta={}", oms.delta());
                 }

@@ -49,4 +49,12 @@ impl SimBroker {
             })
         .await;
     }
+
+    pub async fn cancel_order(&self, order_id: OrderId) {
+        sleep(Duration::from_millis(30)).await;
+        let _ = self
+            .oms_tx
+            .send(OmsEvent::CancelConfirmed { order_id })
+            .await;
+    }
 }

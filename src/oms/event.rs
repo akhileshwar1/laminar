@@ -34,6 +34,8 @@ pub enum OmsEvent {
         reply: oneshot::Sender<rust_decimal::Decimal>,
     },
 
+    CancelAll,
+
     // internal
     Tick,
 }

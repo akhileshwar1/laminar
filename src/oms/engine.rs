@@ -91,6 +91,18 @@ impl OmsEngine {
             }
         }
     }
+
+    pub fn open_order_ids(&self) -> Vec<OrderId> {
+        self.orders
+            .iter()
+            .filter(|(_, o)| matches!(
+                    o.state,
+                    super::order::OrderState::Open { .. }
+                    | super::order::OrderState::PartiallyFilled { .. }
+            ))
+            .map(|(id, _)| *id)
+            .collect()
+    }
 }
 
 #[cfg(test)]
