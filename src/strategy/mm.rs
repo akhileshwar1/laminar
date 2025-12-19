@@ -1,21 +1,41 @@
-use rust_decimal_macros::dec;
-use tokio::sync::{mpsc, oneshot};
-use tokio::time::{sleep, Duration};
 
+use rust_decimal::Decimal;
+use rust_decimal_macros::dec;
+
+use tokio::sync::{mpsc, oneshot, broadcast};
+
+use crate::market::types::MarketSnapshot;
 use crate::oms::event::OmsEvent;
 use crate::oms::order::Side;
-use super::price_sim::PriceSim;
 
-pub async fn run_mm_strategy(oms_tx: mpsc::Sender<OmsEvent>) {
-    let mut price = PriceSim::new(dec!(100.0));
-
+pub async fn run_mm_strategy(
+    mut market_rx: broadcast::Receiver<MarketSnapshot>,
+    oms_tx: mpsc::Sender<OmsEvent>,
+) {
     let spread = dec!(0.2);
     let base_qty = dec!(1.0);
 
     loop {
-        let mid = price.tick();
+        // wait for next market snapshot
+        let snapshot = match market_rx.recv().await {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
 
-        // query delta
+        // extract best bid / ask
+        let best_bid = match snapshot.book.bids.first() {
+            Some(l) => l.price,
+            None => continue,
+        };
+
+        let best_ask = match snapshot.book.asks.first() {
+            Some(l) => l.price,
+            None => continue,
+        };
+
+        let mid = (best_bid + best_ask) / dec!(2);
+
+        // query inventory delta
         let (tx, rx) = oneshot::channel();
         oms_tx
             .send(OmsEvent::GetDelta { reply: tx })
@@ -55,7 +75,5 @@ pub async fn run_mm_strategy(oms_tx: mpsc::Sender<OmsEvent>) {
             })
         .await
             .unwrap();
-
-        sleep(Duration::from_secs(1)).await;
-    }
+        }
 }

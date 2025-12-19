@@ -5,8 +5,11 @@ use laminar::oms::event::OmsEvent;
 use laminar::oms::runtime::start_oms;
 use laminar::strategy::mm::run_mm_strategy;
 
+use laminar::market::hyperliquid::HyperliquidMarket;
+use laminar::market::MarketAdapter;
+
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     println!("[MAIN] starting laminar");
 
     let oms = start_oms();
@@ -17,11 +20,17 @@ async fn main() {
         .await
         .unwrap();
 
+    let market = HyperliquidMarket::new("BTC").await?;
+    market.start();
+
+    let market_rx = market.subscribe();
+
     // start strategy loop
-    tokio::spawn(run_mm_strategy(tx.clone()));
+    tokio::spawn(run_mm_strategy(market_rx, tx.clone()));
 
     // let it run
     sleep(Duration::from_secs(5)).await;
 
     println!("[MAIN] exiting");
+    Ok(())
 }
