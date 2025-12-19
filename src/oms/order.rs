@@ -5,6 +5,8 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct OrderId(pub Uuid);
 
+// pub type ClientOrderId = String;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Side {
     Buy,
@@ -46,7 +48,8 @@ pub enum OrderState {
 
 #[derive(Debug, Clone)]
 pub struct Order {
-    pub id: OrderId,
+    pub id: OrderId,              // internal
+    // pub cloid: ClientOrderId,     // external
     pub side: Side,
     pub original_qty: Decimal,
     pub limit_price: Decimal,
@@ -57,6 +60,7 @@ impl Order {
     pub fn new(side: Side, qty: Decimal, price: Decimal) -> Self {
         Self {
             id: OrderId(Uuid::new_v4()),
+            // cloid: format!("laminar-{}", Uuid::new_v4()),
             side,
             original_qty: qty,
             limit_price: price,
