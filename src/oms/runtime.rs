@@ -1,8 +1,9 @@
 use tokio::sync::mpsc;
+use std::sync::Arc;
 
 use super::engine::OmsEngine;
 use super::event::OmsEvent;
-use crate::broker::sim::SimBroker;
+use crate::broker::{Broker, sim::SimBroker, types::BrokerCommand};
 
 pub struct OmsRuntime {
     sender: mpsc::Sender<OmsEvent>,
@@ -16,8 +17,15 @@ impl OmsRuntime {
 
 pub fn start_oms() -> OmsRuntime {
     let (tx, mut rx) = mpsc::channel::<OmsEvent>(1024);
-    let broker = SimBroker::new(tx.clone());
-
+    let (broker_tx, broker_rx) = mpsc::channel::<BrokerCommand>(1024);
+    let broker: Arc<dyn Broker> = Arc::new(
+        SimBroker::new(
+            broker_rx,
+            broker_tx.clone(),
+            tx.clone(),
+        )
+    );
+    broker.start();
     
     tokio::spawn(async move {
         let mut oms = OmsEngine::new();
@@ -41,8 +49,16 @@ pub fn start_oms() -> OmsRuntime {
                     );
                     let broker = broker.clone();
                     tokio::spawn(async move {
-                        broker.place_order(oid, side, qty, price).await;
-                    });
+                        broker.command_sender()
+                            .send(BrokerCommand::PlaceLimit {
+                                order_id: oid,
+                                side,
+                                qty,
+                                price,
+                            })
+                        .await
+                            .unwrap();
+                        });
                 }
 
                 OmsEvent::OrderAccepted { order_id } => {
@@ -86,13 +102,16 @@ pub fn start_oms() -> OmsRuntime {
                 }
 
                 OmsEvent::CancelAll => {
-                    for id in oms.open_order_ids() {
-                        oms.request_cancel(id);
+                    for order_id in oms.open_order_ids() {
+                        oms.request_cancel(order_id);
 
                         let broker = broker.clone();
                         tokio::spawn(async move {
-                            broker.cancel_order(id).await;
-                        });
+                            broker.command_sender()
+                                .send(BrokerCommand::Cancel { order_id })
+                                .await
+                                .unwrap();
+                            });
                     }
                 }
 
