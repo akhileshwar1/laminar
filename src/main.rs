@@ -12,7 +12,7 @@ use laminar::market::MarketAdapter;
 async fn main() -> anyhow::Result<()> {
     println!("[MAIN] starting laminar");
 
-    let oms = start_oms();
+    let oms = start_oms().await;
     let tx = oms.sender();
 
     // set an initial target

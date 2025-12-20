@@ -1,6 +1,10 @@
 pub mod sim;
 pub mod types;
 
+mod hyperliquid;
+
+pub use hyperliquid::HyperliquidBroker;
+
 use tokio::sync::mpsc;
 
 use crate::broker::types::BrokerCommand;

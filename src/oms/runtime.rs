@@ -1,9 +1,17 @@
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 use std::sync::Arc;
+use std::env;
+
+use ethers::signers::Wallet;
+use ethers::core::k256::ecdsa::SigningKey;
 
 use super::engine::OmsEngine;
 use super::event::OmsEvent;
 use crate::broker::{Broker, sim::SimBroker, types::BrokerCommand};
+use hyperliquid_rust_sdk::BaseUrl;
+
+#[cfg(feature = "hyperliquid")]
+use crate::broker::HyperliquidBroker;
 
 pub struct OmsRuntime {
     sender: mpsc::Sender<OmsEvent>,
@@ -15,16 +23,44 @@ impl OmsRuntime {
     }
 }
 
-pub fn start_oms() -> OmsRuntime {
+pub async fn start_oms() -> OmsRuntime {
     let (tx, mut rx) = mpsc::channel::<OmsEvent>(1024);
     let (broker_tx, broker_rx) = mpsc::channel::<BrokerCommand>(1024);
-    let broker: Arc<dyn Broker> = Arc::new(
-        SimBroker::new(
-            broker_rx,
-            broker_tx.clone(),
-            tx.clone(),
-        )
-    );
+    // ---- WALLET (TESTNET) ----
+    let private_key = env::var("HL_TESTNET_PRIVATE_KEY")
+        .expect("HL_TESTNET_PRIVATE_KEY not set");
+
+    let wallet: Wallet<SigningKey> = private_key
+        .parse()
+        .expect("invalid testnet private key");
+
+    let broker: Arc<dyn Broker> = {
+        #[cfg(feature = "hyperliquid")]
+        {
+            Arc::new(
+                HyperliquidBroker::new(
+                    wallet,
+                    BaseUrl::Testnet,
+                    broker_tx.clone(),
+                    Mutex::new(Some(broker_rx)),
+                    tx.clone(),
+                )
+                .await
+                .expect("failed to start hyperliquid broker"),
+            )
+        }
+
+        #[cfg(not(feature = "hyperliquid"))]
+        {
+            Arc::new(
+                SimBroker::new(
+                    broker_rx,
+                    broker_tx.clone(),
+                    tx.clone(),
+                )
+            )
+        }
+    };
     broker.start();
     
     tokio::spawn(async move {
