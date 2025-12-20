@@ -5,6 +5,7 @@ use tokio::task::JoinHandle;
 
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::prelude::FromPrimitive;
 
 use ethers::signers::Wallet;
 use ethers::core::k256::ecdsa::SigningKey;
@@ -16,12 +17,20 @@ use hyperliquid_rust_sdk::{
     ClientOrder,
     ClientOrderRequest,
     ClientCancelRequest,
-    ClientCancelRequestCloid
+    ClientCancelRequestCloid,
+    InfoClient,
+    Subscription,
+    Message,
 };
+use ethers::types::H160;
+use alloy::primitives::Address;
+use tokio::sync::mpsc::UnboundedSender;
+use ethers::signers::Signer;
+use uuid::Uuid;
 
 use crate::broker::{Broker};
 use crate::broker::types::BrokerCommand;
-use crate::oms::order::Side;
+use crate::oms::order::{OrderId, Side};
 use crate::oms::event::OmsEvent;
 
 type HlWallet = Wallet<SigningKey>;
@@ -73,6 +82,10 @@ impl Broker for HyperliquidBroker {
             .expect("broker already started");
 
         let oms_tx = self.oms_tx.clone();
+
+        // ===============================
+        // REST COMMAND LOOP
+        // ===============================
 
         tokio::spawn(async move {
             // let mut rx = rx.lock().await;
@@ -134,6 +147,62 @@ impl Broker for HyperliquidBroker {
                         println!("[BROKER][HL] cancel {:?} → {:?}", order_id, res);
                     }
 
+                }
+            }
+        });
+
+        // ===============================
+        // WS FILL LISTENER
+        // ===============================
+        let client_ws = self.client.clone();
+        let oms_tx_ws = self.oms_tx.clone();
+
+        tokio::spawn(async move {
+            let base_url = if client_ws.http_client.base_url.contains("testnet") {
+                BaseUrl::Testnet
+            } else {
+                BaseUrl::Mainnet
+            };
+
+            let mut info = InfoClient::new(None, Some(base_url))
+                .await
+                .expect("info client");
+
+            let wallet_addr: H160 = client_ws.wallet.address();
+
+            let (msg_tx, mut msg_rx) =
+                tokio::sync::mpsc::unbounded_channel::<Message>();
+
+            info.subscribe(
+                Subscription::UserFills { user: wallet_addr },
+                msg_tx,
+            )
+                .await
+                .expect("subscribe user fills");
+
+            println!("[BROKER][HL] WS subscribed to user fills");
+
+            while let Some(msg) = msg_rx.recv().await {
+                match msg {
+                    Message::UserFills ( user_fills ) => {
+                        for fill in user_fills.data.fills {
+                            let qty = fill.sz.parse::<f64>().unwrap();
+                            let price = fill.px.parse::<f64>().unwrap();
+
+                            if let Some(cloid) = fill.cloid.as_deref() {
+                                if let Ok(uuid) = Uuid::parse_str(cloid) {
+                                    let _ = oms_tx_ws
+                                        .send(OmsEvent::Fill {
+                                            order_id: OrderId(uuid),
+                                            qty: Decimal::from_f64(qty).expect("invalid qty f64"),
+                                            price: Decimal::from_f64(price).expect("invalid price f64"),
+                                        })
+                                    .await;
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
                 }
             }
         });
