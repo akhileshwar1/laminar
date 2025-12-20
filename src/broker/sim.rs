@@ -37,7 +37,7 @@ impl Broker for SimBroker {
         self.cmd_tx.clone()
     }
 
-    fn start(&self) {
+    fn start(self: Arc<Self>) {
         let inner = self.inner.clone();
 
         tokio::spawn(async move {

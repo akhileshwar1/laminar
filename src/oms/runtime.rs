@@ -34,34 +34,30 @@ pub async fn start_oms() -> OmsRuntime {
         .parse()
         .expect("invalid testnet private key");
 
-    let broker: Arc<dyn Broker> = {
-        #[cfg(feature = "hyperliquid")]
-        {
-            Arc::new(
-                HyperliquidBroker::new(
-                    wallet,
-                    BaseUrl::Testnet,
-                    broker_tx.clone(),
-                    Mutex::new(Some(broker_rx)),
-                    tx.clone(),
-                )
-                .await
-                .expect("failed to start hyperliquid broker"),
+    let broker: Arc<dyn Broker> = if cfg!(feature = "hyperliquid") {
+        Arc::new(
+            HyperliquidBroker::new(
+                wallet,
+                BaseUrl::Testnet,
+                broker_tx.clone(),
+                Mutex::new(Some(broker_rx)),
+                tx.clone(),
             )
-        }
-
-        #[cfg(not(feature = "hyperliquid"))]
-        {
-            Arc::new(
-                SimBroker::new(
-                    broker_rx,
-                    broker_tx.clone(),
-                    tx.clone(),
-                )
+            .await
+            .expect("broker init failed"),
+        )
+    } else {
+        Arc::new(
+            SimBroker::new(
+                broker_rx,
+                broker_tx.clone(),
+                tx.clone(),
             )
-        }
+        )
     };
-    broker.start();
+    
+    broker.clone().start();
+    drop(broker);
     
     tokio::spawn(async move {
         let mut oms = OmsEngine::new();
@@ -83,9 +79,9 @@ pub async fn start_oms() -> OmsRuntime {
                         "[OMS] order created {:?} {:?} qty={} price={}",
                         oid, side, qty, price
                     );
-                    let broker = broker.clone();
+                    let broker_tx = broker_tx.clone();
                     tokio::spawn(async move {
-                        broker.command_sender()
+                        broker_tx
                             .send(BrokerCommand::PlaceLimit {
                                 order_id: oid,
                                 side,
@@ -141,9 +137,9 @@ pub async fn start_oms() -> OmsRuntime {
                     for order_id in oms.open_order_ids() {
                         oms.request_cancel(order_id);
 
-                        let broker = broker.clone();
+                        let broker_tx = broker_tx.clone();
                         tokio::spawn(async move {
-                            broker.command_sender()
+                            broker_tx
                                 .send(BrokerCommand::Cancel { order_id })
                                 .await
                                 .unwrap();

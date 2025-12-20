@@ -73,15 +73,11 @@ impl Broker for HyperliquidBroker {
         self.tx.clone()
     }
 
-    fn start(&self) {
+    fn start(self : Arc<Self>) {
         let client = self.client.clone();
-        let mut rx = self
-            .rx
-            .blocking_lock()
-            .take()
-            .expect("broker already started");
-
         let oms_tx = self.oms_tx.clone();
+        let client_ws = self.client.clone();
+        let oms_tx_ws = self.oms_tx.clone();
 
         // ===============================
         // REST COMMAND LOOP
@@ -89,6 +85,12 @@ impl Broker for HyperliquidBroker {
 
         tokio::spawn(async move {
             // let mut rx = rx.lock().await;
+            let mut rx = self
+            .rx
+            .lock()
+            .await
+            .take()
+            .expect("broker already started");
 
             while let Some(cmd) = rx.recv().await {
                 match cmd {
@@ -154,8 +156,7 @@ impl Broker for HyperliquidBroker {
         // ===============================
         // WS FILL LISTENER
         // ===============================
-        let client_ws = self.client.clone();
-        let oms_tx_ws = self.oms_tx.clone();
+        
 
         tokio::spawn(async move {
             let base_url = if client_ws.http_client.base_url.contains("testnet") {
