@@ -81,7 +81,22 @@ impl Order {
         let remaining = match self.state {
             OrderState::Open { remaining }
             | OrderState::PartiallyFilled { remaining } => remaining,
-            _ => panic!("Fill on non-live order"),
+        //     OrderState::New=> {
+        //         // Treat fill as implicit acceptance
+        //         self.on_accepted();
+        //         match self.state {
+        //             OrderState::Open { remaining } => remaining,
+        //             _ => unreachable!(),
+        //         }
+        //     }
+
+        //     OrderState::Filled | OrderState::Cancelled => {
+        //         // Idempotency / late WS message
+        //         return;
+        //     }
+        //     _ => panic!("Fill on non-live order"),
+        // };
+        _ => panic!("Fill on non-live order"),
         };
 
         assert!(fill_qty > dec!(0));

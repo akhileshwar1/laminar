@@ -1,6 +1,7 @@
 use std::sync::Arc;
-use std::ops::Div;
-use std::ops::Mul;
+
+use std::collections::HashSet;
+use hex;
 
 use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
@@ -132,6 +133,9 @@ impl Broker for HyperliquidBroker {
         let client_ws = self.client.clone();
         let oms_tx_ws = self.oms_tx.clone();
 
+        let seen_trades = Arc::new(Mutex::new(HashSet::<String>::new()));
+        let seen_trades_ws = seen_trades.clone();
+
         // ===============================
         // REST COMMAND LOOP
         // ===============================
@@ -253,21 +257,42 @@ impl Broker for HyperliquidBroker {
                 println!("[HL][WS][RAW] {:?}", msg);
                 match msg {
                     Message::UserFills ( user_fills ) => {
+                        if user_fills.data.is_snapshot == Some(true) {
+                            continue;
+                        }
+
                         for fill in user_fills.data.fills {
+                            println!("in fill!!!!!");
+                            let mut seen = seen_trades_ws.lock().await;
+                            if !seen.insert(fill.hash.clone()) {
+                                continue;
+                            }
+                            drop(seen); // guarantees idempotency on fills.
                             let qty = fill.sz.parse::<f64>().unwrap();
                             let price = fill.px.parse::<f64>().unwrap();
 
+                            println!("in filler!!!!!");
                             if let Some(cloid) = fill.cloid.as_deref() {
-                                if let Ok(uuid) = Uuid::parse_str(cloid) {
-                                    println!("[WS] fill uuid is {}", uuid);
-                                    let _ = oms_tx_ws
-                                        .send(OmsEvent::Fill {
-                                            order_id: OrderId(uuid),
-                                            qty: Decimal::from_f64(qty).expect("invalid qty f64"),
-                                            price: Decimal::from_f64(price).expect("invalid price f64"),
-                                        })
-                                    .await;
+
+                                
+                                let cloid = cloid.strip_prefix("0x").unwrap_or(cloid);
+
+                                if cloid.len() == 32 {
+                                    if let Ok(bytes) = hex::decode(cloid) {
+                                        let bytes: Vec<u8> = bytes;
+                                        if let Ok(uuid) = Uuid::from_slice(&bytes) {
+                                            println!("[WS] fill uuid is {}", uuid);
+                                            let _ = oms_tx_ws
+                                                .send(OmsEvent::Fill {
+                                                    order_id: OrderId(uuid),
+                                                    qty: Decimal::from_f64(qty).unwrap(),
+                                                    price: Decimal::from_f64(price).unwrap(),
+                                                })
+                                            .await;
+                                        }
+                                    }
                                 }
+
                             }
                         }
                     }

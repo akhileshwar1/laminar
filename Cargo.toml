@@ -30,6 +30,7 @@ hyperliquid_rust_sdk = { version = "0.6", optional = true }
 anyhow = "1.0.100"
 alloy = "1.1.3"
 ethers = "2.0.14"
+hex = "0.4.3"
 # binance = { version = "0.11", optional = true }
 
 [features]
