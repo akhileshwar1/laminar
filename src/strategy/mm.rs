@@ -8,12 +8,16 @@ use crate::market::types::MarketSnapshot;
 use crate::oms::event::OmsEvent;
 use crate::oms::order::Side;
 
+fn snap_to_tick(price: Decimal, tick: Decimal) -> Decimal {
+    (price / tick).floor() * tick
+}
+
 pub async fn run_mm_strategy(
     mut market_rx: broadcast::Receiver<MarketSnapshot>,
     oms_tx: mpsc::Sender<OmsEvent>,
 ) {
     let spread = dec!(0.2);
-    let base_qty = dec!(1.0);
+    let base_qty = dec!(0.01);
 
     loop {
         // wait for next market snapshot
@@ -46,8 +50,11 @@ pub async fn run_mm_strategy(
         // inventory skew
         let skew = delta * dec!(0.05);
 
-        let bid = mid - spread / dec!(2) - skew;
-        let ask = mid + spread / dec!(2) - skew;
+        let raw_bid = mid - spread / dec!(2) - skew;
+        let raw_ask = mid + spread / dec!(2) - skew;
+
+        let bid = snap_to_tick(raw_bid, dec!(1.0));
+        let ask = snap_to_tick(raw_ask, dec!(1.0));
 
         println!(
             "[MM] mid={} delta={} bid={} ask={}",

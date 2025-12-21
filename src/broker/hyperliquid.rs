@@ -1,9 +1,12 @@
 use std::sync::Arc;
+use std::ops::Div;
+use std::ops::Mul;
 
 use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
 
 use rust_decimal::Decimal;
+use rust_decimal::RoundingStrategy;
 use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::prelude::FromPrimitive;
 
@@ -21,6 +24,7 @@ use hyperliquid_rust_sdk::{
     InfoClient,
     Subscription,
     Message,
+    Meta,
 };
 use ethers::types::H160;
 use alloy::primitives::Address;
@@ -33,13 +37,46 @@ use crate::broker::types::BrokerCommand;
 use crate::oms::order::{OrderId, Side};
 use crate::oms::event::OmsEvent;
 
+
+use std::collections::HashMap;
+use anyhow::Result;
+
 type HlWallet = Wallet<SigningKey>;
+
+#[derive(Debug, Clone)]
+pub struct SymbolRules {
+    pub tick: Decimal,
+    pub sz_decimals: u32,
+}
+
+pub async fn build_symbol_rules(
+    base_url: BaseUrl,
+) -> anyhow::Result<HashMap<String, SymbolRules>> {
+    let info = InfoClient::new(None, Some(base_url)).await?;
+    let meta = info.meta().await?;
+
+    let mut map = HashMap::new();
+
+    for asset in &meta.universe {
+        map.insert(
+            asset.name.clone(),
+            SymbolRules {
+                tick: Decimal::new(5, 1), // 0.5 ← PERP RULE
+                sz_decimals: asset.sz_decimals,
+            },
+        );
+    }
+
+    Ok(map)
+}
+
 
 pub struct HyperliquidBroker {
     tx: mpsc::Sender<BrokerCommand>,
     rx: Mutex<Option<mpsc::Receiver<BrokerCommand>>>,
     oms_tx: mpsc::Sender<OmsEvent>,
     client: Arc<ExchangeClient>,
+    rules: HashMap<String, SymbolRules>,
 }
 
 impl HyperliquidBroker {
@@ -59,13 +96,29 @@ impl HyperliquidBroker {
         )
             .await?;
 
+        let rules =  build_symbol_rules(BaseUrl::Testnet)
+            .await
+            .expect("failed to load symbol rules");
+
         Ok(Self {
             tx,
             rx,
             oms_tx,
             client: Arc::new(client),
+            rules,
         })
     }
+
+    fn quantize_price(&self, symbol: &str, price: Decimal) -> Decimal {
+        let tick = self.rules[symbol].tick;
+        (price / tick).floor() * tick
+    }
+
+    fn quantize_qty(&self, symbol: &str, qty: Decimal) -> Decimal {
+        let decimals = self.rules[symbol].sz_decimals;
+        qty.round_dp_with_strategy(decimals, RoundingStrategy::ToZero)
+    }
+
 }
 
 impl Broker for HyperliquidBroker {
@@ -101,13 +154,26 @@ impl Broker for HyperliquidBroker {
                         price,
                     } => {
                         let is_buy = matches!(side, Side::Buy);
+                        let symbol = "BTC";
+
+                        let price_dec = self.quantize_price(symbol, price);
+                        let qty_dec   = self.quantize_qty(symbol, qty);
+
+                        // IMPORTANT: convert only after quantization
+                        let price_f64 = price_dec
+                            .to_f64()
+                            .expect("price not representable as f64");
+
+                        let qty_f64 = qty_dec
+                            .to_f64()
+                            .expect("qty not representable as f64");
 
                         let order = ClientOrderRequest {
-                            asset: "BTC".to_string(), // ← for now, hardcoded
+                            asset: symbol.to_string(), // ← for now, hardcoded
                             is_buy,
                             reduce_only: false,
-                            limit_px: price.to_f64().unwrap(),
-                            sz: qty.to_f64().unwrap(),
+                            limit_px: price_f64,
+                            sz: qty_f64,
                             cloid: Some(order_id.0), // ← use OMS order_id
                             order_type: ClientOrder::Limit(ClientLimit {
                                 tif: "Gtc".to_string(),
@@ -184,6 +250,7 @@ impl Broker for HyperliquidBroker {
             println!("[BROKER][HL] WS subscribed to user fills");
 
             while let Some(msg) = msg_rx.recv().await {
+                println!("[HL][WS][RAW] {:?}", msg);
                 match msg {
                     Message::UserFills ( user_fills ) => {
                         for fill in user_fills.data.fills {
@@ -192,6 +259,7 @@ impl Broker for HyperliquidBroker {
 
                             if let Some(cloid) = fill.cloid.as_deref() {
                                 if let Ok(uuid) = Uuid::parse_str(cloid) {
+                                    println!("[WS] fill uuid is {}", uuid);
                                     let _ = oms_tx_ws
                                         .send(OmsEvent::Fill {
                                             order_id: OrderId(uuid),
