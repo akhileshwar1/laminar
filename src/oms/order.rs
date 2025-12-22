@@ -70,10 +70,24 @@ impl Order {
 
     /// Called when venue acks the order
     pub fn on_accepted(&mut self) {
-        assert!(matches!(self.state, OrderState::New));
-        self.state = OrderState::Open {
-            remaining: self.original_qty,
-        };
+        match self.state {
+            OrderState::New => {
+                self.state = OrderState::Open {
+                    remaining: self.original_qty,
+                };
+            }
+
+            // Accept arrived late — already progressed
+            OrderState::Open { .. }
+            | OrderState::PartiallyFilled { .. }
+            | OrderState::Filled
+                | OrderState::Cancelled
+                | OrderState::CancelPending
+                | OrderState::Rejected => {
+                    // Idempotent / out-of-order accept
+                    return;
+                }
+        }
     }
 
     /// Called when a fill arrives
@@ -81,23 +95,25 @@ impl Order {
         let remaining = match self.state {
             OrderState::Open { remaining }
             | OrderState::PartiallyFilled { remaining } => remaining,
-        //     OrderState::New=> {
-        //         // Treat fill as implicit acceptance
-        //         self.on_accepted();
-        //         match self.state {
-        //             OrderState::Open { remaining } => remaining,
-        //             _ => unreachable!(),
-        //         }
-        //     }
+            OrderState::New=> {
+                // Treat fill as implicit acceptance
+                self.on_accepted();
+                match self.state {
+                    OrderState::Open { remaining } => remaining,
+                    _ => unreachable!(),
+                }
+            }
 
-        //     OrderState::Filled | OrderState::Cancelled => {
-        //         // Idempotency / late WS message
-        //         return;
-        //     }
-        //     _ => panic!("Fill on non-live order"),
-        // };
-        _ => panic!("Fill on non-live order"),
+            OrderState::Filled
+                | OrderState::Cancelled
+                | OrderState::CancelPending
+                | OrderState::Rejected => {
+                // Idempotency / late WS message
+                return;
+            }
         };
+        // _ => panic!("Fill on non-live order"),
+        // };
 
         assert!(fill_qty > dec!(0));
         assert!(fill_qty <= remaining);
