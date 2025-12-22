@@ -1,4 +1,3 @@
-
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 
@@ -16,8 +15,7 @@ pub async fn run_mm_strategy(
     mut market_rx: broadcast::Receiver<MarketSnapshot>,
     oms_tx: mpsc::Sender<OmsEvent>,
 ) {
-    let spread = dec!(0.2);
-    let base_qty = dec!(0.01);
+    let base_qty = dec!(0.001);
 
     loop {
         // wait for next market snapshot
@@ -38,6 +36,7 @@ pub async fn run_mm_strategy(
         };
 
         let mid = (best_bid + best_ask) / dec!(2);
+        let spread = best_ask - best_bid;
 
         // query inventory delta
         let (tx, rx) = oneshot::channel();
@@ -50,8 +49,8 @@ pub async fn run_mm_strategy(
         // inventory skew
         let skew = delta * dec!(0.05);
 
-        let raw_bid = mid - spread / dec!(2) - skew;
-        let raw_ask = mid + spread / dec!(2) - skew;
+        let raw_bid = mid - spread / dec!(2) + skew;
+        let raw_ask = mid + spread / dec!(2) + skew;
 
         let bid = snap_to_tick(raw_bid, dec!(1.0));
         let ask = snap_to_tick(raw_ask, dec!(1.0));
