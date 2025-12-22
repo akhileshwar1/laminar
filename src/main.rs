@@ -29,7 +29,8 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(run_mm_strategy(market_rx, tx.clone()));
 
     // let it run
-    sleep(Duration::from_secs(5)).await;
+    tokio::signal::ctrl_c().await?;
+    // sleep(Duration::from_secs(5)).await;
 
     println!("[MAIN] exiting");
     Ok(())
