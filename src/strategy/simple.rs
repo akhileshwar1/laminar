@@ -5,6 +5,7 @@ use tokio::time::{sleep, Duration};
 
 use crate::oms::event::OmsEvent;
 use crate::oms::order::Side;
+use tracing::{info, warn, error};
 
 pub async fn run_strategy(oms_tx: mpsc::Sender<OmsEvent>) {
     loop {
@@ -16,10 +17,10 @@ pub async fn run_strategy(oms_tx: mpsc::Sender<OmsEvent>) {
             .unwrap();
 
         let delta = rx.await.unwrap();
-        println!("[STRAT] delta = {}", delta);
+        info!("[STRAT] delta = {}", delta);
 
         if delta != dec!(0) {
-            println!("[STRAT] cancelling stale orders");
+            info!("[STRAT] cancelling stale orders");
             oms_tx.send(OmsEvent::CancelAll).await.unwrap();
 
             if delta > dec!(0) {

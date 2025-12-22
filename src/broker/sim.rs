@@ -6,6 +6,8 @@ use rust_decimal_macros::dec;
 use crate::broker::{Broker, types::BrokerCommand};
 use crate::oms::event::OmsEvent;
 
+use tracing::{info, warn, error};
+
 struct SimBrokerInner {
     cmd_rx: mpsc::Receiver<BrokerCommand>,
     oms_tx: mpsc::Sender<OmsEvent>,
@@ -51,7 +53,7 @@ impl Broker for SimBroker {
                         price,
                         ..
                     } => {
-                        println!("[SIM] place {:?} qty={} @ {}", order_id, qty, price);
+                        info!("[SIM] place {:?} qty={} @ {}", order_id, qty, price);
 
                         sleep(Duration::from_millis(50)).await;
                         let _ = inner.oms_tx

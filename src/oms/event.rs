@@ -2,6 +2,7 @@ use rust_decimal::Decimal;
 use tokio::sync::oneshot;
 
 use super::order::{OrderId, Side};
+use crate::oms::snapshot::OmsSnapshot;
 
 #[derive(Debug)]
 pub enum OmsEvent {
@@ -36,6 +37,10 @@ pub enum OmsEvent {
     },
 
     CancelAll,
+
+    GetSnapshot {
+        reply: oneshot::Sender<OmsSnapshot>,
+    },
 
     // internal
     Tick,

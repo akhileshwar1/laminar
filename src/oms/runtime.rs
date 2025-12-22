@@ -8,7 +8,10 @@ use ethers::core::k256::ecdsa::SigningKey;
 use super::engine::OmsEngine;
 use super::event::OmsEvent;
 use crate::broker::{Broker, sim::SimBroker, types::BrokerCommand};
+use crate::oms::snapshot::OmsSnapshot;
 use hyperliquid_rust_sdk::BaseUrl;
+
+use tracing::{info, warn, error};
 
 #[cfg(feature = "hyperliquid")]
 use crate::broker::HyperliquidBroker;
@@ -62,20 +65,20 @@ pub async fn start_oms() -> OmsRuntime {
     tokio::spawn(async move {
         let mut oms = OmsEngine::new();
 
-        println!("[OMS] started");
+        info!("[OMS] started");
 
         while let Some(event) = rx.recv().await {
-            println!("[OMS] event received: {:?}", event);
+            info!("[OMS] event received: {:?}", event);
 
             match event {
                 OmsEvent::SetTarget { qty } => {
                     oms.set_target_position(qty);
-                    println!("[OMS] target set → delta = {}", oms.delta());
+                    info!("[OMS] target set → delta = {}", oms.delta());
                 }
 
                 OmsEvent::CreateOrder { side, qty, price } => {
                     let oid = oms.create_order(side, qty, price);
-                    println!(
+                    info!(
                         "[OMS] order created {:?} {:?} qty={} price={}",
                         oid, side, qty, price
                     );
@@ -95,7 +98,7 @@ pub async fn start_oms() -> OmsRuntime {
 
                 OmsEvent::OrderAccepted { order_id } => {
                     oms.on_order_accepted(order_id);
-                    println!(
+                    info!(
                         "[OMS] order accepted {:?}, delta={}",
                         order_id,
                         oms.delta()
@@ -109,7 +112,7 @@ pub async fn start_oms() -> OmsRuntime {
                 } => {
                     oms.on_fill(order_id, qty, price);
                     let pos = oms.position();
-                    println!(
+                    info!(
                         "[OMS] fill {:?} qty={} price={} → net={} avg={} pnl={}",
                         order_id,
                         qty,
@@ -122,7 +125,7 @@ pub async fn start_oms() -> OmsRuntime {
 
                 OmsEvent::CancelConfirmed { order_id } => {
                     oms.on_cancel_confirmed(order_id);
-                    println!(
+                    info!(
                         "[OMS] cancel confirmed {:?}, delta={}",
                         order_id,
                         oms.delta()
@@ -147,13 +150,24 @@ pub async fn start_oms() -> OmsRuntime {
                     }
                 }
 
+                OmsEvent::GetSnapshot { reply } => {
+                    let pos = oms.position();
+                    let snapshot = OmsSnapshot {
+                        orders: oms.order_views(),
+                        net_position: pos.net_qty,
+                        avg_price: pos.avg_price,
+                    };
+                    let _ = reply.send(snapshot);
+                }
+
+
                 OmsEvent::Tick => {
-                    println!("[OMS] tick → delta={}", oms.delta());
+                    info!("[OMS] tick → delta={}", oms.delta());
                 }
             }
         }
 
-        println!("[OMS] channel closed, exiting");
+        info!("[OMS] channel closed, exiting");
     });
 
 

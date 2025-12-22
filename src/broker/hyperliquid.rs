@@ -13,6 +13,7 @@ use rust_decimal::prelude::FromPrimitive;
 
 use ethers::signers::Wallet;
 use ethers::core::k256::ecdsa::SigningKey;
+use tracing::{info, warn, error};
 
 use hyperliquid_rust_sdk::{
     BaseUrl,
@@ -191,13 +192,13 @@ impl Broker for HyperliquidBroker {
                                 let _ = oms_tx
                                     .send(OmsEvent::OrderAccepted { order_id })
                                     .await;
-                                println!(
+                                info!(
                                     "[BROKER][HL] order {:?} accepted → {:?}",
                                     order_id, r
                                 );
                             }
                             Err(e) => {
-                                println!(
+                                info!(
                                     "[BROKER][HL] order {:?} failed → {:?}",
                                     order_id, e
                                 );
@@ -216,7 +217,7 @@ impl Broker for HyperliquidBroker {
                                 .send(OmsEvent::CancelConfirmed { order_id })
                                 .await;
 
-                        println!("[BROKER][HL] cancel {:?} → {:?}", order_id, res);
+                        info!("[BROKER][HL] cancel {:?} → {:?}", order_id, res);
                     }
 
                 }
@@ -251,10 +252,10 @@ impl Broker for HyperliquidBroker {
                 .await
                 .expect("subscribe user fills");
 
-            println!("[BROKER][HL] WS subscribed to user fills");
+            info!("[BROKER][HL] WS subscribed to user fills");
 
             while let Some(msg) = msg_rx.recv().await {
-                println!("[HL][WS][RAW] {:?}", msg);
+                info!("[HL][WS][RAW] {:?}", msg);
                 match msg {
                     Message::UserFills ( user_fills ) => {
                         if user_fills.data.is_snapshot == Some(true) {
@@ -262,7 +263,7 @@ impl Broker for HyperliquidBroker {
                         }
 
                         for fill in user_fills.data.fills {
-                            println!("in fill!!!!!");
+                            info!("in fill!!!!!");
                             let mut seen = seen_trades_ws.lock().await;
                             if !seen.insert(fill.hash.clone()) {
                                 continue;
@@ -271,7 +272,7 @@ impl Broker for HyperliquidBroker {
                             let qty = fill.sz.parse::<f64>().unwrap();
                             let price = fill.px.parse::<f64>().unwrap();
 
-                            println!("in filler!!!!!");
+                            info!("in filler!!!!!");
                             if let Some(cloid) = fill.cloid.as_deref() {
 
                                 
@@ -281,7 +282,7 @@ impl Broker for HyperliquidBroker {
                                     if let Ok(bytes) = hex::decode(cloid) {
                                         let bytes: Vec<u8> = bytes;
                                         if let Ok(uuid) = Uuid::from_slice(&bytes) {
-                                            println!("[WS] fill uuid is {}", uuid);
+                                            info!("[WS] fill uuid is {}", uuid);
                                             let _ = oms_tx_ws
                                                 .send(OmsEvent::Fill {
                                                     order_id: OrderId(uuid),

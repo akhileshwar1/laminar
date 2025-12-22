@@ -23,7 +23,7 @@ impl OmsEngine {
         }
     }
 
-    /* ---------- Strategy-facing ---------- */
+    /* ---------- Strategy/tui-facing ---------- */
 
     pub fn set_target_position(&mut self, qty: Decimal) {
         self.core.set_target_position(Quantity(qty));
@@ -35,6 +35,13 @@ impl OmsEngine {
 
     pub fn position(&self) -> &Position {
         &self.position
+    }
+
+    pub fn order_views(&self) -> Vec<super::snapshot::OrderView> {
+        self.orders
+            .values()
+            .map(|o| o.view())
+            .collect()
     }
 
     /* ---------- Order lifecycle ---------- */

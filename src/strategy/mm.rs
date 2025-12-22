@@ -7,6 +7,8 @@ use crate::market::types::MarketSnapshot;
 use crate::oms::event::OmsEvent;
 use crate::oms::order::Side;
 
+use tracing::{info, warn, error};
+
 fn snap_to_tick(price: Decimal, tick: Decimal) -> Decimal {
     (price / tick).floor() * tick
 }
@@ -55,7 +57,7 @@ pub async fn run_mm_strategy(
         let bid = snap_to_tick(raw_bid, dec!(1.0));
         let ask = snap_to_tick(raw_ask, dec!(1.0));
 
-        println!(
+        info!(
             "[MM] mid={} delta={} bid={} ask={}",
             mid, delta, bid, ask
         );

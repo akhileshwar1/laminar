@@ -4,6 +4,13 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct OrderId(pub Uuid);
+use std::fmt;
+
+impl fmt::Display for OrderId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 // pub type ClientOrderId = String;
 
@@ -65,6 +72,24 @@ impl Order {
             original_qty: qty,
             limit_price: price,
             state: OrderState::New,
+        }
+    }
+
+    pub fn view(&self) -> super::snapshot::OrderView {
+        let remaining_qty = match self.state {
+            OrderState::Open { remaining }
+            | OrderState::PartiallyFilled { remaining } => remaining,
+
+            _ => dec!(0),
+        };
+
+        super::snapshot::OrderView {
+            id: self.id,
+            side: self.side,
+            limit_price: self.limit_price,
+            original_qty: self.original_qty,
+            remaining_qty,
+            state: self.state.clone(),
         }
     }
 
