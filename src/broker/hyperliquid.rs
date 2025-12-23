@@ -206,6 +206,9 @@ impl Broker for HyperliquidBroker {
                         match res {
                             Ok(r) => {
                                 if has_error_status(&r) {
+                                    let _ = oms_tx
+                                        .send(OmsEvent::OrderRejected { order_id })
+                                        .await;
                                     info!(
                                         "[BROKER][HL] order {:?} rejected → {:?}",
                                         order_id, r
