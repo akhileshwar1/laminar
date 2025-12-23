@@ -59,6 +59,12 @@ impl OmsEngine {
         self.recompute_open_exposure();
     }
 
+    pub fn on_order_rejected(&mut self, id: OrderId) {
+        let order = self.orders.get_mut(&id).expect("unknown order");
+        order.on_rejected();
+        self.recompute_open_exposure();
+    }
+
     pub fn on_fill(&mut self, id: OrderId, fill_qty: Decimal, price: Decimal) {
         let order = self.orders.get_mut(&id).expect("unknown order");
         order.on_fill(fill_qty);

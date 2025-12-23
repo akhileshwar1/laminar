@@ -41,7 +41,8 @@ pub async fn start_oms() -> OmsRuntime {
         Arc::new(
             HyperliquidBroker::new(
                 wallet,
-                BaseUrl::Testnet,
+                // BaseUrl::Testnet,
+                BaseUrl::Mainnet,
                 broker_tx.clone(),
                 Mutex::new(Some(broker_rx)),
                 tx.clone(),
@@ -100,6 +101,15 @@ pub async fn start_oms() -> OmsRuntime {
                     oms.on_order_accepted(order_id);
                     info!(
                         "[OMS] order accepted {:?}, delta={}",
+                        order_id,
+                        oms.delta()
+                    );
+                }
+
+                OmsEvent::OrderRejected{ order_id } => {
+                    oms.on_order_rejected(order_id);
+                    info!(
+                        "[OMS] order rejected {:?}, delta={}",
                         order_id,
                         oms.delta()
                     );

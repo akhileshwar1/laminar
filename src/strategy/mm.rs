@@ -39,7 +39,10 @@ pub async fn run_mm_strategy(
 
         let mid = (best_bid + best_ask) / dec!(2);
         let spread = best_ask - best_bid;
-
+        info!(
+            "[MM]  bid={} ask={}",
+             best_bid, best_ask
+        );
         // query inventory delta
         let (tx, rx) = oneshot::channel();
         oms_tx

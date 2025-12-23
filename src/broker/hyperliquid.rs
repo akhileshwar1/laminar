@@ -27,6 +27,8 @@ use hyperliquid_rust_sdk::{
     Subscription,
     Message,
     Meta,
+    ExchangeResponseStatus,
+    ExchangeDataStatus
 };
 use ethers::types::H160;
 use alloy::primitives::Address;
@@ -123,6 +125,20 @@ impl HyperliquidBroker {
 
 }
 
+fn has_error_status(r: &ExchangeResponseStatus) -> bool {
+    match r {
+        ExchangeResponseStatus::Ok(resp) => {
+            resp.data
+                .as_ref()
+                .map(|d| {
+                    d.statuses.iter().any(|s| matches!(s, ExchangeDataStatus::Error(_)))
+                })
+                .unwrap_or(false)
+        }
+        ExchangeResponseStatus::Err(_) => true,
+    }
+}
+
 impl Broker for HyperliquidBroker {
     fn command_sender(&self) -> mpsc::Sender<BrokerCommand> {
         self.tx.clone()
@@ -189,21 +205,33 @@ impl Broker for HyperliquidBroker {
 
                         match res {
                             Ok(r) => {
-                                let _ = oms_tx
-                                    .send(OmsEvent::OrderAccepted { order_id })
-                                    .await;
-                                info!(
-                                    "[BROKER][HL] order {:?} accepted → {:?}",
-                                    order_id, r
-                                );
+                                if has_error_status(&r) {
+                                    info!(
+                                        "[BROKER][HL] order {:?} rejected → {:?}",
+                                        order_id, r
+                                    );
+                                    // DO NOT send OrderAccepted
+                                } else {
+                                    let _ = oms_tx
+                                        .send(OmsEvent::OrderAccepted { order_id })
+                                        .await;
+
+                                    info!(
+                                        "[BROKER][HL] order {:?} accepted → {:?}",
+                                        order_id, r
+                                    );
+                                }
                             }
+
                             Err(e) => {
                                 info!(
-                                    "[BROKER][HL] order {:?} failed → {:?}",
+                                    "[BROKER][HL] order {:?} transport failed → {:?}",
                                     order_id, e
                                 );
                             }
                         }
+
+
                     }
 
                     BrokerCommand::Cancel { order_id } => {
@@ -213,11 +241,30 @@ impl Broker for HyperliquidBroker {
                         };
 
                         let res = client.cancel_by_cloid(cancel, None).await;
-                        let _ = oms_tx
-                                .send(OmsEvent::CancelConfirmed { order_id })
-                                .await;
+                        
+                        match res {
+                            Ok(r) => {
+                                if has_error_status(&r) {
+                                    info!(
+                                        "[BROKER][HL] cancel {:?} rejected → {:?}",
+                                        order_id, r
+                                    );
+                                } else {
+                                    let _ = oms_tx
+                                        .send(OmsEvent::CancelConfirmed { order_id })
+                                        .await;
+                                }
+                            }
 
-                        info!("[BROKER][HL] cancel {:?} → {:?}", order_id, res);
+                            Err(e) => {
+                                info!(
+                                    "[BROKER][HL] cancel {:?} transport failed → {:?}",
+                                    order_id, e
+                                );
+                            }
+                        }
+
+
                     }
 
                 }

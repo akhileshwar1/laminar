@@ -22,6 +22,10 @@ pub enum OmsEvent {
         order_id: OrderId,
     },
 
+    OrderRejected {
+        order_id: OrderId,
+    },
+
     Fill {
         order_id: OrderId,
         qty: Decimal,

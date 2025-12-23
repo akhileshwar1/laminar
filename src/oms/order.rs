@@ -115,6 +115,15 @@ impl Order {
         }
     }
 
+    pub fn on_rejected(&mut self) {
+        match self.state {
+            OrderState::New => {
+                self.state = OrderState::Rejected;
+            }
+            _ => panic!("reject on non-created order"),
+        }
+    }
+
     /// Called when a fill arrives
     pub fn on_fill(&mut self, fill_qty: Decimal) {
         let remaining = match self.state {
