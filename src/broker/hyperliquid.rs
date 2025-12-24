@@ -62,6 +62,7 @@ pub async fn build_symbol_rules(
     let mut map = HashMap::new();
 
     for asset in &meta.universe {
+        info!("asset name {} asset sz {}", asset.name.clone(), asset.sz_decimals);
         map.insert(
             asset.name.clone(),
             SymbolRules {
@@ -114,8 +115,29 @@ impl HyperliquidBroker {
     }
 
     fn quantize_price(&self, symbol: &str, price: Decimal) -> Decimal {
-        let tick = self.rules[symbol].tick;
-        (price / tick).floor() * tick
+        // let tick = self.rules[symbol].tick;
+        // (price / tick).floor() * tick
+        // Hyperliquid Perp Rule: Max decimals = 6 - szDecimals
+        let max_decimals = 6 - self.rules[symbol].sz_decimals;
+
+        // 1. Apply the decimal cap
+        let mut p = price.round_dp_with_strategy(max_decimals, RoundingStrategy::ToZero);
+
+        // 2. Apply the 5 Significant Figures Rule (Exchange-wide cap)
+        let s_figs = p.to_string()
+            .replace(".", "")
+            .trim_start_matches('0')
+            .len();
+
+        if s_figs > 5 {
+            let current_scale = p.scale();
+            p = p.round_dp_with_strategy(
+                current_scale - (s_figs as u32 - 5), 
+                RoundingStrategy::ToZero
+            );
+        }
+
+        p.normalize() // Removes trailing zeros for the API
     }
 
     fn quantize_qty(&self, symbol: &str, qty: Decimal) -> Decimal {
@@ -175,7 +197,7 @@ impl Broker for HyperliquidBroker {
                         price,
                     } => {
                         let is_buy = matches!(side, Side::Buy);
-                        let symbol = "BTC";
+                        let symbol = "TST";
 
                         let price_dec = self.quantize_price(symbol, price);
                         let qty_dec   = self.quantize_qty(symbol, qty);
@@ -239,7 +261,7 @@ impl Broker for HyperliquidBroker {
 
                     BrokerCommand::Cancel { order_id } => {
                         let cancel = ClientCancelRequestCloid {
-                            asset: "BTC".to_string(),
+                            asset: "TST".to_string(),
                             cloid: order_id.0,
                         };
 
