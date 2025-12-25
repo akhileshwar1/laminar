@@ -20,15 +20,34 @@ fn pct_change(a: Decimal, b: Decimal) -> Decimal {
     }
 }
 
+fn inventory_ratios(delta: Decimal) -> (Decimal, Decimal) {
+    // delta = target - current position
+    // target is 0, so delta < 0 => net short
+
+    let max_ratio = dec!(2.0);
+    let min_ratio = dec!(0.0);
+
+    let k = dec!(0.5); // aggressiveness
+
+    let bid_ratio = (dec!(1.0) + (delta * k))
+        .clamp(min_ratio, max_ratio);
+
+    let ask_ratio = (dec!(2.0) - bid_ratio)
+        .clamp(min_ratio, max_ratio);
+
+    (bid_ratio, ask_ratio)
+}
+
 pub async fn run_mm_strategy(
     mut market_rx: broadcast::Receiver<MarketSnapshot>,
     oms_tx: mpsc::Sender<OmsEvent>,
 ) {
-    let base_qty = dec!(0.001);
+    // let base_qty = dec!(0.00013);
+    let base_qty = dec!(700); // for tst
 
     // --- refresh controls ---
     let min_pct_move = dec!(0.0002); // 2 bps
-    let min_refresh_interval = Duration::from_secs(2);
+    let min_refresh_interval = Duration::from_secs(10);
 
     let mut last_bid: Option<Decimal> = None;
     let mut last_ask: Option<Decimal> = None;
@@ -50,19 +69,44 @@ pub async fn run_mm_strategy(
             None => continue,
         };
 
+        info!("best_bid {} best_ask {}", best_bid, best_ask);
         let mid = (best_bid + best_ask) / dec!(2);
-        let spread = best_ask - best_bid;
+        // let spread = dec!(20)*(best_ask - best_bid);
+        let spread_pct = dec!(0.0005);
+        let abs_spread = mid * spread_pct;
+        let half_spread = abs_spread / dec!(2);
 
         // inventory delta
         let (tx, rx) = oneshot::channel();
         let _ = oms_tx.send(OmsEvent::GetDelta { reply: tx }).await;
         let delta = rx.await.unwrap_or(dec!(0));
 
-        let skew = delta * dec!(0.05);
+        let tick = dec!(0.0000001);
 
-        let bid = snap_to_tick(mid - spread / dec!(2) + skew, dec!(1));
-        let ask = snap_to_tick(mid + spread / dec!(2) + skew, dec!(1));
+        let bid = snap_to_tick(mid - half_spread, tick)
+            .min(snap_to_tick(best_bid - tick, tick));
 
+        let ask = snap_to_tick(mid + half_spread, tick)
+            .max(snap_to_tick(best_ask + tick, tick));
+
+        if bid >= ask {
+            continue;
+        }
+        let (bid_ratio, ask_ratio) = inventory_ratios(delta);
+        info!("bid_qty {} ask_qty {}",base_qty *bid_ratio, base_qty *ask_ratio);
+
+        let bid_qty = (base_qty * bid_ratio)
+            .max(dec!(0));
+
+        let ask_qty = (base_qty * ask_ratio)
+            .max(dec!(0));
+
+
+        info!("bid_qty {} ask_qty {}",base_qty *bid_ratio, base_qty *ask_ratio);
+
+        if bid_qty == dec!(0) && ask_qty == dec!(0) {
+            continue;
+        }
         // --- refresh decision ---
         let price_moved = match (last_bid, last_ask) {
             (Some(lb), Some(la)) => {
@@ -93,7 +137,7 @@ pub async fn run_mm_strategy(
         let _ = oms_tx
             .send(OmsEvent::CreateOrder {
                 side: Side::Buy,
-                qty: base_qty,
+                qty: bid_qty,
                 price: bid,
             })
             .await;
@@ -101,7 +145,7 @@ pub async fn run_mm_strategy(
         let _ = oms_tx
             .send(OmsEvent::CreateOrder {
                 side: Side::Sell,
-                qty: base_qty,
+                qty: ask_qty,
                 price: ask,
             })
             .await;

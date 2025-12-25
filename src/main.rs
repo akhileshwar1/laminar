@@ -23,11 +23,11 @@ async fn main() -> anyhow::Result<()> {
     let tx = oms.sender();
 
     // set an initial target
-    tx.send(OmsEvent::SetTarget { qty: dec!(1.0) })
+    tx.send(OmsEvent::SetTarget { qty: dec!(0) })
         .await
         .unwrap();
 
-    let market = HyperliquidMarket::new("BTC").await?;
+    let market = HyperliquidMarket::new("TST").await?;
     market.start();
 
     let market_rx = market.subscribe();
