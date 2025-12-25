@@ -54,6 +54,7 @@ pub async fn run_mm_strategy(
     let mut last_refresh = Instant::now() - min_refresh_interval;
 
     loop {
+
         let snapshot = match market_rx.recv().await {
             Ok(s) => s,
             Err(_) => continue,
@@ -70,6 +71,16 @@ pub async fn run_mm_strategy(
         };
 
         info!("best_bid {} best_ask {}", best_bid, best_ask);
+
+        let (tx, rx) = oneshot::channel();
+        let _ = oms_tx.send(OmsEvent::GetAccountSnapshot { reply: tx }).await;
+
+        let account = match rx.await {
+            Ok(a) => a,
+            Err(_) => continue,
+        };
+        info!("account : available_margin {}", account.available_margin);
+
         let mid = (best_bid + best_ask) / dec!(2);
         // let spread = dec!(20)*(best_ask - best_bid);
         let spread_pct = dec!(0.0005);

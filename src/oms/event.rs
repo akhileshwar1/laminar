@@ -3,6 +3,7 @@ use tokio::sync::oneshot;
 
 use super::order::{OrderId, Side};
 use crate::oms::snapshot::OmsSnapshot;
+use crate::oms::account::AccountSnapshot;
 
 #[derive(Debug)]
 pub enum OmsEvent {
@@ -44,6 +45,14 @@ pub enum OmsEvent {
 
     GetSnapshot {
         reply: oneshot::Sender<OmsSnapshot>,
+    },
+
+    GetAccountSnapshot {
+        reply: oneshot::Sender<AccountSnapshot>,
+    },
+
+    UpdateAccountSnapshot {
+        snapshot: AccountSnapshot,
     },
 
     // internal

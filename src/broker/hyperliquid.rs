@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use tokio::time::Duration;
 use std::collections::HashSet;
 use hex;
 
@@ -7,13 +8,17 @@ use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
 
 use rust_decimal::Decimal;
+use rust_decimal_macros::dec;
 use rust_decimal::RoundingStrategy;
 use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::prelude::FromPrimitive;
 
 use ethers::signers::Wallet;
 use ethers::core::k256::ecdsa::SigningKey;
-use tracing::{info, warn, error};
+use tracing::{info, warn};
+use crate::oms::account::AccountSnapshot;
+
+use std::str::FromStr;
 
 use hyperliquid_rust_sdk::{
     BaseUrl,
@@ -80,7 +85,14 @@ pub struct HyperliquidBroker {
     tx: mpsc::Sender<BrokerCommand>,
     rx: Mutex<Option<mpsc::Receiver<BrokerCommand>>>,
     oms_tx: mpsc::Sender<OmsEvent>,
+
+    // trading
     client: Arc<ExchangeClient>,
+
+    // read-only state
+    info_client: Arc<InfoClient>,
+    address: H160,
+
     rules: HashMap<String, SymbolRules>,
 }
 
@@ -92,6 +104,9 @@ impl HyperliquidBroker {
         rx: Mutex<Option<mpsc::Receiver<BrokerCommand>>>,
         oms_tx: mpsc::Sender<OmsEvent>, 
     ) -> anyhow::Result<Self> {
+        // wallet address (H160)
+        let address = wallet.address();
+
         let client = ExchangeClient::new(
             None,
             wallet,
@@ -105,11 +120,16 @@ impl HyperliquidBroker {
             .await
             .expect("failed to load symbol rules");
 
+        // info / read-only client
+        let info_client = InfoClient::with_reconnect(None, None).await?;
+
         Ok(Self {
             tx,
             rx,
             oms_tx,
             client: Arc::new(client),
+            info_client: Arc::new(info_client),
+            address,
             rules,
         })
     }
@@ -147,6 +167,26 @@ impl HyperliquidBroker {
 
 }
 
+async fn fetch_account_snapshot(
+    info: &InfoClient,
+    address: H160,
+) -> anyhow::Result<AccountSnapshot> {
+    let state = info.user_state(address).await?;
+
+    let cms = &state.cross_margin_summary;
+    let account_value = Decimal::from_str(&cms.account_value)?;
+    let raw_usd = Decimal::from_str(&cms.total_raw_usd)?;
+    let unrealized_pnl = account_value - raw_usd;
+
+    Ok(AccountSnapshot {
+        equity: account_value,
+        used_margin: Decimal::from_str(&cms.total_margin_used)?,
+        available_margin: Decimal::from_str(&state.withdrawable)?,
+        unrealized_pnl: unrealized_pnl,
+        realized_pnl: dec!(0), // HL does not expose this directly
+    })
+}
+
 fn has_error_status(r: &ExchangeResponseStatus) -> bool {
     match r {
         ExchangeResponseStatus::Ok(resp) => {
@@ -171,6 +211,9 @@ impl Broker for HyperliquidBroker {
         let oms_tx = self.oms_tx.clone();
         let client_ws = self.client.clone();
         let oms_tx_ws = self.oms_tx.clone();
+        let oms_tx_balance = self.oms_tx.clone();
+        let info_client = self.info_client.clone();
+        let address = self.address;
 
         let seen_trades = Arc::new(Mutex::new(HashSet::<String>::new()));
         let seen_trades_ws = seen_trades.clone();
@@ -373,5 +416,29 @@ impl Broker for HyperliquidBroker {
                 }
             }
         });
+        
+        // ===============================
+        // POLL ACCOUNT SNAPSHOT 
+        // ===============================
+
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(5));
+
+            loop {
+                interval.tick().await;
+
+                match fetch_account_snapshot(&info_client, address).await {
+                    Ok(snapshot) => {
+                        let _ = oms_tx_balance
+                            .send(OmsEvent::UpdateAccountSnapshot { snapshot })
+                            .await;
+                        }
+                    Err(e) => {
+                        warn!("account snapshot failed: {:?}", e);
+                    }
+                }
+            }
+        });
+
     }
 }

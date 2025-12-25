@@ -170,6 +170,15 @@ pub async fn start_oms() -> OmsRuntime {
                     let _ = reply.send(snapshot);
                 }
 
+                OmsEvent::UpdateAccountSnapshot { snapshot } => {
+                    oms.update_account_snapshot(Some(snapshot));
+                }
+
+                OmsEvent::GetAccountSnapshot { reply } => {
+                    if let Some(ref acc) = oms.get_account_snapshot() {
+                        let _ = reply.send(acc.clone());
+                    }
+                }
 
                 OmsEvent::Tick => {
                     info!("[OMS] tick → delta={}", oms.delta());

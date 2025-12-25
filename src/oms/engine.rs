@@ -6,12 +6,14 @@ use rust_decimal_macros::dec;
 use super::core::{OmsCore, Quantity};
 use super::position::Position;
 use super::order::{Order, OrderId, Side};
+use crate::oms::account::AccountSnapshot;
 
 #[derive(Debug)]
 pub struct OmsEngine {
     core: OmsCore,
     orders: HashMap<OrderId, Order>,
     position: Position,
+    account: Option<AccountSnapshot>,
 }
 
 impl OmsEngine {
@@ -20,6 +22,7 @@ impl OmsEngine {
             core: OmsCore::new(),
             orders: HashMap::new(),
             position: Position::new(),
+            account: None,
         }
     }
 
@@ -43,6 +46,15 @@ impl OmsEngine {
             .map(|o| o.view())
             .collect()
     }
+
+    pub fn update_account_snapshot(&mut self, acc_snapshot: Option<AccountSnapshot>) {
+        self.account = acc_snapshot;
+    }
+
+    pub fn get_account_snapshot(&self) -> Option<AccountSnapshot> {
+        return self.account.clone();
+    }
+
 
     /* ---------- Order lifecycle ---------- */
 
