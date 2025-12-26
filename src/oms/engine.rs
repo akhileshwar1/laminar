@@ -7,6 +7,7 @@ use super::core::{OmsCore, Quantity};
 use super::position::Position;
 use super::order::{Order, OrderId, Side};
 use crate::oms::account::AccountSnapshot;
+use crate::oms::state::TradingState;
 
 #[derive(Debug)]
 pub struct OmsEngine {
@@ -14,6 +15,7 @@ pub struct OmsEngine {
     orders: HashMap<OrderId, Order>,
     position: Position,
     account: Option<AccountSnapshot>,
+    trading_state: TradingState,
 }
 
 impl OmsEngine {
@@ -23,6 +25,7 @@ impl OmsEngine {
             orders: HashMap::new(),
             position: Position::new(),
             account: None,
+            trading_state: TradingState::Running,
         }
     }
 
@@ -55,6 +58,13 @@ impl OmsEngine {
         return self.account.clone();
     }
 
+    pub fn get_trading_state(&self) -> TradingState {
+        return self.trading_state.clone();
+    }
+
+    pub fn set_trading_state(&mut self, trading_state: TradingState) {
+        self.trading_state = trading_state;
+    }
 
     /* ---------- Order lifecycle ---------- */
 

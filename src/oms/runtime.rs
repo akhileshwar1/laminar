@@ -12,6 +12,7 @@ use super::event::OmsEvent;
 use crate::broker::{Broker, sim::SimBroker, types::BrokerCommand};
 use crate::oms::snapshot::OmsSnapshot;
 use crate::oms::order::Side;
+use crate::oms::state::TradingState;
 use hyperliquid_rust_sdk::BaseUrl;
 
 use tracing::{info, warn, error};
@@ -81,6 +82,14 @@ pub async fn start_oms() -> OmsRuntime {
                 }
 
                 OmsEvent::CreateOrder { side, qty, price } => {
+                    if oms.get_trading_state() != TradingState::Running {
+                        warn!(
+                            "[OMS] rejecting CreateOrder {:?} {:?} — trading halted",
+                            side, qty
+                        );
+                        continue;
+                    }
+
                     let oid = oms.create_order(side, qty, price);
                     info!(
                         "[OMS] order created {:?} {:?} qty={} price={}",
@@ -150,6 +159,9 @@ pub async fn start_oms() -> OmsRuntime {
                 }
 
                 OmsEvent::CancelAll => {
+                    if oms.get_trading_state() == TradingState::Halted {
+                        continue;
+                    }
                     for order_id in oms.open_order_ids() {
                         oms.request_cancel(order_id);
 
@@ -211,6 +223,37 @@ pub async fn start_oms() -> OmsRuntime {
                                 .await;
                             });
                     }
+                }
+
+                OmsEvent::RiskKill { reason, qty, limit_px, } => {
+                    if oms.get_trading_state() != TradingState::Running {
+                        continue;
+                    }
+
+                    warn!("[OMS][RISK] KILL SWITCH TRIGGERED: {}", reason);
+
+                    oms.set_trading_state(TradingState::Flattening);
+
+                    // 1. cancel all live orders
+                    for order_id in oms.open_order_ids() {
+                        oms.request_cancel(order_id);
+
+                        let broker_tx = broker_tx.clone();
+                        tokio::spawn(async move {
+                            let _ = broker_tx
+                                .send(BrokerCommand::Cancel { order_id })
+                                .await;
+                            });
+                    }
+                    if qty != dec!(0) {
+                        let _ = broker_tx
+                            .send(BrokerCommand::Flatten { qty, limit_px })
+                            .await;
+                    }
+
+                    oms.set_trading_state(TradingState::Halted);
+
+                    warn!("[OMS][RISK] TRADING HALTED");
                 }
 
                 OmsEvent::Tick => {
