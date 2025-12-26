@@ -174,18 +174,29 @@ async fn fetch_account_snapshot(
     let state = info.user_state(address).await?;
 
     let cms = &state.cross_margin_summary;
-    let account_value = Decimal::from_str(&cms.account_value)?;
+
+    let equity = Decimal::from_str(&cms.account_value)?;
     let raw_usd = Decimal::from_str(&cms.total_raw_usd)?;
-    let unrealized_pnl = account_value - raw_usd;
+    let unrealized_pnl = equity - raw_usd;
+
+    let mut net_position = dec!(0);
+    for ap in &state.asset_positions {
+        if ap.position.coin == "TST" {
+            net_position = Decimal::from_str(&ap.position.szi)?;
+            break;
+        }
+    }
 
     Ok(AccountSnapshot {
-        equity: account_value,
+        equity,
         used_margin: Decimal::from_str(&cms.total_margin_used)?,
         available_margin: Decimal::from_str(&state.withdrawable)?,
-        unrealized_pnl: unrealized_pnl,
-        realized_pnl: dec!(0), // HL does not expose this directly
+        unrealized_pnl,
+        realized_pnl: dec!(0), // HL doesn’t expose cleanly
+        net_position,
     })
 }
+
 
 fn has_error_status(r: &ExchangeResponseStatus) -> bool {
     match r {

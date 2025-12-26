@@ -79,7 +79,7 @@ pub async fn run_mm_strategy(
             Ok(a) => a,
             Err(_) => continue,
         };
-        info!("account : available_margin {}", account.available_margin);
+        info!("account : net_position {}", account.net_position);
 
         let mid = (best_bid + best_ask) / dec!(2);
         // let spread = dec!(20)*(best_ask - best_bid);

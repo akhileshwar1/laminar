@@ -7,4 +7,5 @@ pub struct AccountSnapshot {
     pub used_margin: Decimal,
     pub unrealized_pnl: Decimal,
     pub realized_pnl: Decimal,
+    pub net_position: Decimal,
 }

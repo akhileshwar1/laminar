@@ -159,9 +159,9 @@ pub async fn start_oms() -> OmsRuntime {
                 }
 
                 OmsEvent::CancelAll => {
-                    if oms.get_trading_state() == TradingState::Halted {
-                        continue;
-                    }
+                    // if oms.get_trading_state() == TradingState::Halted {
+                    //     continue;
+                    // }
                     for order_id in oms.open_order_ids() {
                         oms.request_cancel(order_id);
 
