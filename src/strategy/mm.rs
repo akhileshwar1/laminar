@@ -65,6 +65,7 @@ pub async fn run_mm_strategy(
         };
 
         let mid = (best_bid + best_ask) / dec!(2);
+        let tick = dec!(0.0000001);
 
         // --- account snapshot ---
         let (tx, rx) = oneshot::channel();
@@ -114,7 +115,6 @@ pub async fn run_mm_strategy(
         let spread_pct = dec!(0.0005);
         let half_spread = mid * spread_pct / dec!(2);
 
-        let tick = dec!(0.0000001);
 
         let bid = snap_to_tick(mid - half_spread, tick)
             .min(snap_to_tick(best_bid - tick, tick));

@@ -40,6 +40,7 @@ impl RiskEngine {
         }
 
         let equity = acct.equity;
+        let tick = dec!(0.0000001);
 
         let dd = (self.state.start_equity - equity)
             / self.state.start_equity;

@@ -364,6 +364,8 @@ impl Broker for HyperliquidBroker {
                             .to_f64()
                             .expect("flatten qty not representable");
 
+                        let limit_px = self.quantize_price(symbol, limit_px);
+
                         let order = ClientOrderRequest {
                             asset: symbol.to_string(),
                             is_buy,
