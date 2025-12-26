@@ -43,8 +43,6 @@ pub async fn run_mm_strategy(
     oms_tx: mpsc::Sender<OmsEvent>,
 ) {
     // let base_qty = dec!(0.00013);
-    let base_qty = dec!(700); // for tst
-
     // --- refresh controls ---
     let min_pct_move = dec!(0.0002); // 2 bps
     let min_refresh_interval = Duration::from_secs(10);
@@ -54,6 +52,8 @@ pub async fn run_mm_strategy(
     let mut last_refresh = Instant::now() - min_refresh_interval;
 
     loop {
+        
+
 
         let snapshot = match market_rx.recv().await {
             Ok(s) => s,
@@ -82,6 +82,17 @@ pub async fn run_mm_strategy(
         info!("account : net_position {}", account.net_position);
 
         let mid = (best_bid + best_ask) / dec!(2);
+        let safety = dec!(0.9);
+        let max_qty = (account.available_margin / mid) * safety;
+
+        // optional absolute cap
+        let base_qty = max_qty.min(dec!(650));
+
+        if base_qty <= dec!(0) {
+            info!("[MM] no margin available, skipping quote");
+            continue;
+        }
+
         // let spread = dec!(20)*(best_ask - best_bid);
         let spread_pct = dec!(0.0005);
         let abs_spread = mid * spread_pct;
