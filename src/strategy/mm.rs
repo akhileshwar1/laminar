@@ -86,7 +86,8 @@ pub async fn run_mm_strategy(
         let base_qty = max_qty_by_margin.min(MAX_ABS_QTY);
 
         // --- no margin but position exists → flatten ---
-        if base_qty <= dec!(0) {
+        if base_qty * mid  <= dec!(10) {
+            info!("[MM] MARGIN EXHAUSTED");
             if net_pos != dec!(0) {
                 info!(
                     "[MM] margin exhausted, flattening position {}",
@@ -161,6 +162,7 @@ pub async fn run_mm_strategy(
         };
 
         if bid_qty == dec!(0) && ask_qty == dec!(0) {
+            info!("[MM] SKIPPING: Quotes are 0");
             continue;
         }
 
