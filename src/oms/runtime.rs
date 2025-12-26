@@ -1,14 +1,17 @@
 use tokio::sync::{mpsc, Mutex};
 use std::sync::Arc;
+
 use std::env;
 
 use ethers::signers::Wallet;
 use ethers::core::k256::ecdsa::SigningKey;
 
+use rust_decimal_macros::dec;
 use super::engine::OmsEngine;
 use super::event::OmsEvent;
 use crate::broker::{Broker, sim::SimBroker, types::BrokerCommand};
 use crate::oms::snapshot::OmsSnapshot;
+use crate::oms::order::Side;
 use hyperliquid_rust_sdk::BaseUrl;
 
 use tracing::{info, warn, error};
@@ -177,6 +180,36 @@ pub async fn start_oms() -> OmsRuntime {
                 OmsEvent::GetAccountSnapshot { reply } => {
                     if let Some(ref acc) = oms.get_account_snapshot() {
                         let _ = reply.send(acc.clone());
+                    }
+                }
+
+                OmsEvent::Flatten { qty, limit_px } => {
+                    info!("[OMS] FLATTEN requested");
+
+                    // 1. cancel all live orders
+                    for order_id in oms.open_order_ids() {
+                        oms.request_cancel(order_id);
+
+                        let broker_tx = broker_tx.clone();
+                        tokio::spawn(async move {
+                            let _ = broker_tx
+                                .send(BrokerCommand::Cancel { order_id })
+                                .await;
+                            });
+                    }
+
+                    if qty != dec!(0) {
+                        let side = if qty > dec!(0) { Side::Sell } else { Side::Buy };
+                        // let qty = net.abs();
+
+                        info!("[OMS] flattening net={} via {:?}", qty, side);
+
+                        let broker_tx = broker_tx.clone();
+                        tokio::spawn(async move {
+                            let _ = broker_tx
+                                .send(BrokerCommand::Flatten { qty, limit_px })
+                                .await;
+                            });
                     }
                 }
 

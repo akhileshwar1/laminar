@@ -55,6 +55,9 @@ pub enum OmsEvent {
         snapshot: AccountSnapshot,
     },
 
+    /// Emergency: flatten all exposure and stop
+    Flatten { qty : Decimal, limit_px : Decimal },
+
     // internal
     Tick,
 }

@@ -85,6 +85,11 @@ impl Broker for SimBroker {
                             .send(OmsEvent::CancelConfirmed { order_id })
                             .await;
                         }
+
+                    BrokerCommand::Flatten { qty, limit_px, }=> {
+                        info!("qty {} {}", qty, limit_px);
+                        return;
+                    }
                 }
             }
         });

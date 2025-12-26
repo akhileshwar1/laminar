@@ -15,7 +15,7 @@ use rust_decimal::prelude::FromPrimitive;
 
 use ethers::signers::Wallet;
 use ethers::core::k256::ecdsa::SigningKey;
-use tracing::{info, warn};
+use tracing::{info, warn, error};
 use crate::oms::account::AccountSnapshot;
 
 use std::str::FromStr;
@@ -333,6 +333,48 @@ impl Broker for HyperliquidBroker {
                         }
 
 
+                    }
+
+                    BrokerCommand::Flatten { qty, limit_px, } => {
+                        let symbol = "TST";
+                        let is_buy = false; // default
+
+                        let side = if qty > dec!(0) {
+                            // qty already abs()'d in OMS
+                            // SELL reduces long
+                            Side::Sell
+                        } else {
+                            Side::Buy
+                        };
+
+                        let is_buy = matches!(side, Side::Buy);
+
+                        let qty_f64 = qty.abs()
+                            .to_f64()
+                            .expect("flatten qty not representable");
+
+                        let order = ClientOrderRequest {
+                            asset: symbol.to_string(),
+                            is_buy,
+                            reduce_only: true, // CRITICAL
+                            limit_px: limit_px.to_f64().unwrap(),
+                            sz: qty_f64,
+                            cloid: None,
+                            order_type: ClientOrder::Limit(ClientLimit {
+                                tif: "Ioc".to_string(),     // immediate-or-cancel,
+                            }),
+                        };
+
+                        info!("[BROKER][HL] flatten market {:?}", side);
+
+                        match client.order(order, None).await {
+                            Ok(r) => {
+                                info!("[BROKER][HL] flatten ok → {:?}", r);
+                            }
+                            Err(e) => {
+                                error!("[BROKER][HL] flatten failed → {:?}", e);
+                            }
+                        }
                     }
 
                 }

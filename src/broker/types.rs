@@ -9,7 +9,14 @@ pub enum BrokerCommand {
         qty: Decimal,
         price: Decimal,
     },
+
     Cancel {
         order_id: OrderId,
+    },
+
+    /// Market order to flatten position
+    Flatten {
+        qty: Decimal,
+        limit_px: Decimal,
     },
 }
