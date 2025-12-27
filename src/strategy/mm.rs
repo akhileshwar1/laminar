@@ -42,7 +42,7 @@ pub async fn run_mm_strategy(
     oms_tx: mpsc::Sender<OmsEvent>,
 ) {
     let min_pct_move = dec!(0.0002); // 2 bps
-    let min_refresh_interval = Duration::from_secs(10);
+    let min_refresh_interval = Duration::from_millis(1000);
 
     let mut last_bid: Option<Decimal> = None;
     let mut last_ask: Option<Decimal> = None;
