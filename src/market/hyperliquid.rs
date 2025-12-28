@@ -13,20 +13,23 @@ use hyperliquid_rust_sdk::{
 };
 
 use crate::market::types::{
+    MarketEvent,
     MarketSnapshot,
     OrderBook,
     BookLevel,
+    Trade,
+    AggressorSide,
 };
 use crate::market::MarketAdapter;
 
 pub struct HyperliquidMarket {
     symbol: String,
-    tx: broadcast::Sender<MarketSnapshot>,
+    tx: broadcast::Sender<MarketEvent>,
 }
 
 impl HyperliquidMarket {
     pub async fn new(symbol: &str) -> anyhow::Result<Self> {
-        let (tx, _) = broadcast::channel(1024);
+        let (tx, _) = broadcast::channel(4096);
 
         Ok(Self {
             symbol: symbol.to_string(),
@@ -36,7 +39,7 @@ impl HyperliquidMarket {
 }
 
 impl MarketAdapter for HyperliquidMarket {
-    fn subscribe(&self) -> broadcast::Receiver<MarketSnapshot> {
+    fn subscribe(&self) -> broadcast::Receiver<MarketEvent> {
         self.tx.subscribe()
     }
 
@@ -51,19 +54,28 @@ impl MarketAdapter for HyperliquidMarket {
 
             let (msg_tx, mut msg_rx) = mpsc::unbounded_channel();
 
+            // ---- L2 book ----
             info.subscribe(
                 Subscription::L2Book { coin: symbol.clone() },
-                msg_tx,
+                msg_tx.clone(),
             )
             .await
             .expect("failed to subscribe to L2Book");
 
-            info!("Hyperliquid L2Book subscribed for {}", symbol);
+            // ---- Trades (tape) ----
+            info.subscribe(
+                Subscription::Trades { coin: symbol.clone() },
+                msg_tx,
+            )
+            .await
+            .expect("failed to subscribe to Trades");
+
+            info!("HL market subscribed (L2 + Trades) for {}", symbol);
 
             while let Some(msg) = msg_rx.recv().await {
                 match msg {
+                    // -------- L2 BOOK --------
                     Message::L2Book(book) => {
-                        // HL: levels[0] = bids, levels[1] = asks
                         let bids = book.data.levels[0]
                             .iter()
                             .filter_map(|l| {
@@ -90,24 +102,54 @@ impl MarketAdapter for HyperliquidMarket {
                             timestamp_ms: book.data.time,
                         };
 
-                        let _ = tx.send(snapshot);
+                        let _ = tx.send(MarketEvent::Snapshot(snapshot));
+                    }
+
+                    // -------- TRADE --------
+                    Message::Trades(trades) => {
+                        for t in trades.data.iter() {
+                            let price = match Decimal::from_str(&t.px) {
+                                Ok(p) => p,
+                                Err(_) => continue,
+                            };
+
+                            let qty = match Decimal::from_str(&t.sz) {
+                                Ok(q) => q,
+                                Err(_) => continue,
+                            };
+
+                            // info!("[MARKET] actual trade {:?}", t);
+                            let side = match t.side.as_str() {
+                                "B" => AggressorSide::Buy,
+                                "A" => AggressorSide::Sell,
+                                _ => continue,
+                            };
+
+                            let trade = Trade {
+                                symbol: symbol.clone(),
+                                price,
+                                qty,
+                                side,
+                                timestamp_ms: t.time,
+                            };
+
+                            let _ = tx.send(MarketEvent::Trade(trade));
+                        }
                     }
 
                     Message::NoData => {
-                        warn!("Hyperliquid stream returned NoData");
+                        warn!("HL stream returned NoData");
                     }
 
                     Message::HyperliquidError(err) => {
-                        warn!("Hyperliquid error: {}", err);
+                        warn!("HL error: {}", err);
                     }
 
-                    _ => {
-                        // Ignore unrelated messages
-                    }
+                    _ => {}
                 }
             }
 
-            warn!("Hyperliquid market stream exited for {}", symbol);
+            warn!("HL market stream exited for {}", symbol);
         });
     }
 }

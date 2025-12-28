@@ -4,14 +4,13 @@ pub mod types;
 pub mod hyperliquid;
 
 use tokio::sync::broadcast;
-use crate::market::types::MarketSnapshot;
+use crate::market::types::MarketEvent;
 
 /// Market data source abstraction
 pub trait MarketAdapter: Send + Sync {
-    /// Subscribe to market snapshots
-    fn subscribe(&self) -> broadcast::Receiver<MarketSnapshot>;
+    /// Subscribe to market events (book + tape)
+    fn subscribe(&self) -> broadcast::Receiver<MarketEvent>;
 
-    /// Start the adapter (spawn tasks, connect sockets, etc.)
+    /// Start the adapter
     fn start(&self);
 }
-

@@ -3,7 +3,7 @@ use tokio::sync::{mpsc, oneshot, broadcast};
 use rust_decimal::Decimal;
 
 use rust_decimal_macros::dec;
-use crate::market::types::MarketSnapshot;
+use crate::market::types::MarketEvent;
 use ratatui::{Terminal, backend::CrosstermBackend};
 use std::io::stdout;
 use ratatui::crossterm::{terminal, execute};
@@ -17,10 +17,11 @@ fn snap_to_tick(price: Decimal, tick: Decimal) -> Decimal {
     (price / tick).floor() * tick
 }
 
-pub async fn run_tui(oms_tx: mpsc::Sender<OmsEvent>,
-    mut market_rx: broadcast::Receiver<MarketSnapshot> )
-    -> anyhow::Result<()> {
-        terminal::enable_raw_mode()?;
+pub async fn run_tui(
+    oms_tx: mpsc::Sender<OmsEvent>,
+    mut market_rx: broadcast::Receiver<MarketEvent>,
+) -> anyhow::Result<()> {
+    terminal::enable_raw_mode()?;
         execute!(stdout(), terminal::EnterAlternateScreen)?;
 
         let backend = CrosstermBackend::new(stdout());
@@ -50,9 +51,10 @@ pub async fn run_tui(oms_tx: mpsc::Sender<OmsEvent>,
             if let Ok(snapshot) = rx.await {
                 app.snapshot = Some(snapshot);
                 let snapshot = match market_rx.try_recv() {
-                    Ok(s) => s,
-                    Err(_) => continue,
+                    Ok(MarketEvent::Snapshot(s)) => s,
+                    _ => continue,
                 };
+
                 // extract best bid / ask
                 let best_bid = match snapshot.book.bids.first() {
                     Some(l) => l.price,
@@ -65,7 +67,7 @@ pub async fn run_tui(oms_tx: mpsc::Sender<OmsEvent>,
                 };
 
                 let mid = (best_bid + best_ask) / dec!(2);
-                let spread = best_ask - best_bid;
+                let spread = dec!(20)*(best_ask - best_bid);
 
                 // query inventory delta
                 let (tx, rx) = oneshot::channel();

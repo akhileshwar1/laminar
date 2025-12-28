@@ -22,3 +22,26 @@ pub struct MarketSnapshot {
     pub timestamp_ms: u64,
 }
 
+/// Trade aggressor side
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AggressorSide {
+    Buy,
+    Sell,
+}
+
+/// Single trade (tape)
+#[derive(Debug, Clone)]
+pub struct Trade {
+    pub symbol: String,
+    pub price: Decimal,
+    pub qty: Decimal,
+    pub side: AggressorSide,
+    pub timestamp_ms: u64,
+}
+
+/// Unified market stream
+#[derive(Debug, Clone)]
+pub enum MarketEvent {
+    Snapshot(MarketSnapshot),
+    Trade(Trade),
+}
