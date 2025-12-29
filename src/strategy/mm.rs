@@ -12,7 +12,7 @@ use crate::oms::order::Side;
 
 const MIN_NOTIONAL: Decimal = dec!(10);
 const SAFETY_MARGIN: Decimal = dec!(0.85);
-const MAX_ABS_QTY: Decimal = dec!(650);
+const MAX_ABS_QTY: Decimal = dec!(580);
 
 // ---- toxic flow ----
 const FLOW_WINDOW: usize = 12;
@@ -124,7 +124,7 @@ pub async fn run_mm_strategy(
     mut market_rx: broadcast::Receiver<MarketEvent>,
     oms_tx: mpsc::Sender<OmsEvent>,
 ) {
-    let min_pct_move = dec!(0.0002);
+    let min_pct_move = dec!(0.0010);
     let min_refresh_interval = Duration::from_millis(10000);
 
     let mut last_bid: Option<Decimal> = None;
@@ -181,22 +181,23 @@ pub async fn run_mm_strategy(
 
                 if base_qty * mid < MIN_NOTIONAL {
                     if net_pos != dec!(0) {
-                        info!("[MM] margin exhausted, flatten {}", net_pos);
+                        info!("[MM] margin exhausted, do nothing {}", net_pos);
 
-                        let is_buy = net_pos < dec!(0);
-                        let px = if is_buy {
-                            best_ask * dec!(1.05)
-                        } else {
-                            best_bid * dec!(0.95)
-                        };
+                        // let is_buy = net_pos < dec!(0);
+                        // let px = if is_buy {
+                        //     best_ask * dec!(1.05)
+                        // } else {
+                        //     best_bid * dec!(0.95)
+                        // };
 
-                        let _ = oms_tx
-                            .send(OmsEvent::Flatten {
-                                qty: net_pos,
-                                limit_px: px,
-                            })
-                        .await;
-                        }
+                        // let _ = oms_tx
+                        //     .send(OmsEvent::Flatten {
+                        //         qty: net_pos,
+                        //         limit_px: px,
+                        //     })
+                        // .await;
+                        // 
+                         }
                     continue;
                 }
 
