@@ -182,11 +182,11 @@ pub async fn run_mm_strategy(
                 let (mut bid_weight, mut ask_weight) = match flow.flow {
                     Flow::Up => {
                          info!("[MM] Toxic buy flow: disabling sells");
-                        (bid_ratio, dec!(0))
+                        (dec!(0), dec!(0))
                     },
                     Flow::Down => {
                         info!("[MM] Toxic sell flow: disabling buys");
-                        (dec!(0), ask_ratio)
+                        (dec!(0), dec!(0))
                     },
                     Flow::Neutral => 
                     {
@@ -219,6 +219,7 @@ pub async fn run_mm_strategy(
                 }
 
                 if bid_qty == dec!(0) && ask_qty == dec!(0) {
+                    info!("[MM] both qts 0 skipping");
                     continue;
                 }
 
